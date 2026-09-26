@@ -1,0 +1,15 @@
+pandas
+pdfplumber
+openpyxl
+shapely
+pyproj
+requests
+streamlit
+folium
+streamlit-folium
+plotly
+google-genai
+pymongo
+python-dotenv
+pytest
+pypdf
