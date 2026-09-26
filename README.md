@@ -1,4 +1,6 @@
-# GridLock
+# GridNeighbors
+
+**Live:** https://gridneighbors.design
 
 Finds where neighboring utilities are planning transmission work in the same place at the same time, ranks the
 coordination opportunities, and estimates what coordinating could save customers.

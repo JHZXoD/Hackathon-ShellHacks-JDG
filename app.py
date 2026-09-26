@@ -1,4 +1,4 @@
-"""GridLock - find where neighboring utilities' planned transmission work overlaps.
+"""GridNeighbors - find where neighboring utilities' planned transmission work overlaps.
 
 Run:  streamlit run app.py
 """
@@ -20,7 +20,7 @@ SHORT = {UTIL_A: "DESC", UTIL_B: "Georgia"}
 TIER_COLORS = {"Touching / crossing": "#dc2626", "Under 1.6 km": "#e11d48", "Under 8 km": "#f59e0b", "Under 40 km": "#a3a3a3"}
 CONF_ORDER = {"high": 3, "medium": 2, "low": 1, "unlocated": 0}
 
-st.set_page_config(page_title="GridLock", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="GridNeighbors", page_icon="⚡", layout="wide")
 
 
 @st.cache_data
@@ -71,7 +71,7 @@ if not ov.empty:
     ov["rank"] = range(1, len(ov) + 1)
 
 # ---------------- header ----------------
-st.title("⚡ GridLock")
+st.title("⚡ GridNeighbors")
 st.markdown("**Where neighboring utilities are planning grid work in the same place, at the same time**: "
             "Dominion Energy South Carolina vs. the Georgia Power 10-year transmission plan.")
 
@@ -189,15 +189,16 @@ with tab_ops:
 
     st.markdown("#### AI coordination brief")
     if brief.available():
-        facts = {k: (v.item() if hasattr(v, "item") else v) for k, v in sel.to_dict().items()}
-        facts["what_they_could_share"] = share
-        facts["estimate"] = {k: v for k, v in est.items() if k != "assumptions"}
+        facts = brief.facts_for(sel, share, est)
+        briefs = st.session_state.setdefault("briefs", {})
         if st.button("Generate brief with Gemini", type="primary"):
             with st.spinner("Writing brief..."):
                 try:
-                    st.markdown(brief.brief(facts))
+                    briefs[sel.overlap_id] = brief.brief(facts)
                 except Exception as exc:  # show the failure, keep the app usable
                     st.error(f"Gemini request failed: {exc}")
+        if sel.overlap_id in briefs:  # stays visible while the user tweaks filters/assumptions
+            st.markdown(md(briefs[sel.overlap_id]))
     else:
         st.caption("Add GEMINI_API_KEY to .env to generate a plain-English brief for planners.")
 
