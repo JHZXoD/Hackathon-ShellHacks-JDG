@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / "data" / "cache" / "briefs.json"
 load_dotenv(ROOT / ".env")
+FALLBACK_MODELS = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-flash-lite-latest"]
 
 PROMPT = """You are helping transmission planners at two neighboring utilities decide whether to coordinate.
 Using ONLY the facts below, write a short brief (max 120 words) with three labeled parts:
@@ -39,11 +40,21 @@ def brief(facts: dict) -> str:
 
     from google import genai
 
+    from google.genai import errors
+
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-    resp = client.models.generate_content(
-        model=os.getenv("GEMINI_MODEL", "gemini-flash-latest"),
-        contents=PROMPT.format(facts=json.dumps(facts, indent=1, default=str)),
-    )
+    # popular models get 503 "high demand" spikes; fall through to the next one
+    models = [os.getenv("GEMINI_MODEL", "gemini-flash-latest"), *FALLBACK_MODELS]
+    last_error = None
+    for model in dict.fromkeys(models):
+        try:
+            resp = client.models.generate_content(
+                model=model, contents=PROMPT.format(facts=json.dumps(facts, indent=1, default=str)))
+            break
+        except errors.ServerError as exc:
+            last_error = exc
+    else:
+        raise last_error
     text = resp.text.strip()
     CACHE.parent.mkdir(parents=True, exist_ok=True)
     cache[key] = text
