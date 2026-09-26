@@ -22,7 +22,7 @@ GPC_TABLE_PAGES = range(177, 191)  # 1-indexed, inclusive of 190
 COLUMNS = [
     "project_id", "utility", "state", "project_name", "description", "need",
     "status", "sponsor", "zone", "in_service_date", "est_cost_usd", "voltage_kv",
-    "source", "source_page",
+    "rate_base_year", "source", "source_page",
 ]
 
 _DATE = r"\d{1,2}/\d{1,2}/\d{2,4}"
@@ -57,6 +57,7 @@ def parse_desc(pdf_path: Path = DESC_PDF) -> pd.DataFrame:
             pid = _section(text, r"Project ID", r"Project Description")
             date_m = re.search(rf"Planned In-Service Date\s*\n\s*({_DATE})", text)
             costs = re.findall(r"\$[\d,]+", text)
+            rb = re.search(r"applied to (\d{4}) Rate Base", text)
             total = int(costs[-1].replace("$", "").replace(",", "")) if costs else None
             rows.append({
                 "project_id": f"DESC_{page_no}",
@@ -71,6 +72,7 @@ def parse_desc(pdf_path: Path = DESC_PDF) -> pd.DataFrame:
                 "in_service_date": _parse_date(date_m.group(1)) if date_m else None,
                 "est_cost_usd": total,
                 "voltage_kv": _max_kv(name),
+                "rate_base_year": int(rb.group(1)) if rb else None,
                 "source": f"DESC SCRTP project list, ID {pid}",
                 "source_page": page_no,
             })
