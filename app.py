@@ -10,15 +10,16 @@ import streamlit as st
 from shapely.ops import nearest_points
 from streamlit_folium import st_folium
 
-from gridlock import brief
+from gridlock import brief, store
 from gridlock.cost import Assumptions, estimate
+from gridlock.geocode import in_state
 from gridlock.overlap import TIERS, find_overlaps, geometry, load_projects
 
 UTIL_A, UTIL_B = "Dominion Energy South Carolina", "Georgia Power"
 COLORS = {UTIL_A: "#2563eb", UTIL_B: "#ea580c"}
 SHORT = {UTIL_A: "DESC", UTIL_B: "Georgia"}
 TIER_COLORS = {"Touching / crossing": "#dc2626", "Under 1.6 km": "#e11d48", "Under 8 km": "#f59e0b", "Under 40 km": "#a3a3a3"}
-CONF_ORDER = {"high": 3, "medium": 2, "low": 1, "unlocated": 0}
+CONF_ORDER = {"verified": 3, "high": 3, "medium": 2, "low": 1, "unlocated": 0}
 
 st.set_page_config(page_title="GridNeighbors", page_icon="⚡", layout="wide")
 
@@ -26,6 +27,15 @@ st.set_page_config(page_title="GridNeighbors", page_icon="⚡", layout="wide")
 @st.cache_data
 def data():
     return load_projects()
+
+
+@st.cache_data(ttl=60)
+def verifications() -> pd.DataFrame:
+    """Community location checks from MongoDB; the app still works if Atlas is unreachable."""
+    try:
+        return store.load_all()
+    except Exception:
+        return pd.DataFrame()
 
 
 @st.cache_data
@@ -46,7 +56,61 @@ def fmt_usd(x: float) -> str:
     return f"${x:,.2f}"
 
 
-projects = data()
+def parse_latlon(text: str) -> tuple[float, float] | None:
+    """Accepts '32.35, -81.17' (the format Google Maps copies on right-click)."""
+    try:
+        lat, lon = (float(x) for x in text.replace("(", "").replace(")", "").split(",")[:2])
+        return lat, lon
+    except ValueError:
+        return None
+
+
+def maps_link(lat: float, lon: float) -> str:
+    return f"https://www.google.com/maps/@{lat},{lon},17z/data=!3m1!1e3"  # satellite view
+
+
+def verify_widget(p: pd.Series, key: str) -> None:
+    """Confirm or correct each endpoint of one project; saved to MongoDB for everyone."""
+    for t in "ab":
+        name = p[f"name_{t}"]
+        if not isinstance(name, str):
+            continue
+        has_pt = pd.notna(p[f"lat_{t}"])
+        where = (f"[{p[f'lat_{t}']:.5f}, {p[f'lon_{t}']:.5f}]({maps_link(p[f'lat_{t}'], p[f'lon_{t}'])})"
+                 if has_pt else "not located yet")
+        match = p[f"match_{t}"] if isinstance(p[f"match_{t}"], str) else "none"
+        conf = p[f"conf_{t}"] if isinstance(p[f"conf_{t}"], str) else "unlocated"
+        conf = {"manual": "hand-verified"}.get(conf, conf)
+        st.markdown(f"**{name.title()}** ({SHORT[p.utility]}) · matched: *{match}* · confidence: `{conf}` · {where}")
+        with st.form(f"verify_{key}_{p.project_id}_{t}", clear_on_submit=True, border=False):
+            c1, c2, c3, c4 = st.columns([2, 3, 2, 1.3])
+            options = ["Location is correct", "Move it to these coordinates"] if has_pt else ["Place it at these coordinates"]
+            action = c1.radio("Action", options, label_visibility="collapsed")
+            coords = c2.text_input("Coordinates", placeholder="lat, lon (right-click in Google Maps to copy)",
+                                   label_visibility="collapsed")
+            who = c3.text_input("Your name", placeholder="Your name (optional)", label_visibility="collapsed")
+            submitted = c4.form_submit_button("Save", width="stretch")
+        if submitted:
+            if action == "Location is correct":
+                lat, lon, kind = p[f"lat_{t}"], p[f"lon_{t}"], "confirm"
+            else:
+                parsed = parse_latlon(coords)
+                if not parsed:
+                    st.error("Enter coordinates as `lat, lon`, e.g. `32.3521, -81.1751`.")
+                    continue
+                (lat, lon), kind = parsed, "correct"
+                # tie lines can end across the river (e.g. Purrysburg, SC on a Georgia project), so allow either state
+                if not (in_state(lat, lon, "SC") or in_state(lat, lon, "GA")):
+                    st.error("Those coordinates are outside South Carolina and Georgia. Check the lat/lon order.")
+                    continue
+            prev = (p[f"lat_{t}"], p[f"lon_{t}"]) if has_pt else None
+            store.save(p.project_id, t, kind, lat, lon, name=who, previous=prev)
+            verifications.clear()
+            st.toast("Saved to the shared database. The map and rankings now use it.", icon="✅")
+            st.rerun()
+
+
+projects = store.apply(data(), verifications())
 
 # ---------------- sidebar filters ----------------
 with st.sidebar:
@@ -187,6 +251,19 @@ with tab_ops:
     total_all = sum(estimate(r, projects, a)["total_savings_usd"] for _, r in ov.iterrows())
     st.caption(md(f"Across all {len(ov)} opportunities shown, estimated coordination value is **{fmt_usd(total_all)}**."))
 
+    st.markdown("#### Verify these locations")
+    if store.available():
+        st.caption("Planners know where their substations are. Confirm or correct a location and it's saved to a shared "
+                   "MongoDB database, so every visitor's map, distances and rankings immediately use it.")
+        by_id = projects.set_index("project_id", drop=False)
+        vc1, vc2 = st.columns(2)
+        with vc1:
+            verify_widget(by_id.loc[sel.project_id_a], "pair")
+        with vc2:
+            verify_widget(by_id.loc[sel.project_id_b], "pair")
+    else:
+        st.caption("Add MONGODB_URI to .env to let users confirm or correct locations.")
+
     st.markdown("#### AI coordination brief")
     if brief.available():
         facts = brief.facts_for(sel, share, est)
@@ -221,6 +298,7 @@ Unmatched names fall back to OSM place search. Hand-verified points come from Sp
 
 | Confidence | Meaning |
 |---|---|
+| verified | confirmed or corrected by a user (stored in MongoDB Atlas) |
 | high | exact substation name match, operator agrees (or hand-verified) |
 | medium | exact name match, operator not tagged |
 | low | fuzzy or place-name match; could be miles off |
@@ -235,6 +313,29 @@ confidence.
 """)
     conf = projects.groupby(["utility", "confidence"]).size().unstack(fill_value=0)
     st.dataframe(conf, width="stretch")
-    st.markdown("**Unlocated projects** (not on the map):")
-    st.dataframe(projects[projects.confidence == "unlocated"][["project_id", "utility", "project_name", "name_a", "name_b"]],
-                 hide_index=True, width="stretch")
+    v = verifications()
+    st.markdown("#### Community verifications")
+    if v.empty:
+        st.caption("No locations verified yet. Confirm or correct one in an opportunity's detail panel.")
+    else:
+        names = projects.set_index("project_id").project_name
+        endpoints = v.groupby(["project_id", "endpoint"]).ngroups
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Verifications", len(v))
+        m2.metric("Substations verified", endpoints)
+        m3.metric("Corrections", int((v.action == "correct").sum()))
+        log = v.sort_values("created_at", ascending=False).head(25).assign(
+            project=lambda d: d.project_id.map(names),
+            when=lambda d: pd.to_datetime(d.created_at).dt.strftime("%b %d %H:%M UTC"))
+        st.dataframe(log[["when", "project", "endpoint", "action", "lat", "lon", "name"]], hide_index=True, width="stretch")
+
+    st.markdown("#### Help locate a project")
+    unlocated = projects[projects.confidence == "unlocated"]
+    st.caption(f"{len(unlocated)} projects couldn't be placed automatically. If you know where one is, place it and it "
+               "joins the overlap analysis for everyone.")
+    if store.available() and len(unlocated):
+        pick = st.selectbox("Project", unlocated.project_id,
+                            format_func=lambda pid: f"{pid}: {unlocated.set_index('project_id').project_name[pid]}")
+        verify_widget(unlocated.set_index("project_id", drop=False).loc[pick], "locate")
+    else:
+        st.dataframe(unlocated[["project_id", "utility", "project_name", "name_a", "name_b"]], hide_index=True, width="stretch")

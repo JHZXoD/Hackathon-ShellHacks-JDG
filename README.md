@@ -17,7 +17,7 @@ python -m venv .venv
 .venv/Scripts/streamlit run app.py
 ```
 
-Optional: copy `.env.example` to `.env` and add a Google AI Studio key to enable Gemini coordination briefs.
+Optional: copy `.env.example` to `.env` and add a Google AI Studio key (`GEMINI_API_KEY`) for Gemini coordination briefs and a MongoDB Atlas connection string (`MONGODB_URI`) for shared location verifications.
 
 ## Pipeline
 
@@ -28,6 +28,7 @@ Optional: copy `.env.example` to `.env` and add a Google AI Studio key to enable
 | Closest-point overlap, tiers, timeline gap, ranking | `gridlock/overlap.py` | `data/processed/overlaps.csv` |
 | Cost / impact estimate | `gridlock/cost.py` | shown in app |
 | Plain-English brief (Gemini) | `gridlock/brief.py` | shown in app |
+| Community location verifications (MongoDB Atlas) | `gridlock/store.py` | applied on every load |
 
 Rebuilding the data needs the sponsor's `Sperry-Tech-Challenge/` folder (not committed) and network access to
 OpenStreetMap (Overpass + Nominatim; results cached in `data/cache/`):

@@ -31,7 +31,7 @@ TIERS = [
     (40.0, "Under 40 km", "Share crews and equipment"),
 ]
 TIER_POINTS = {"Touching / crossing": 40, "Under 1.6 km": 30, "Under 8 km": 15, "Under 40 km": 0}
-CONFIDENCE_WEIGHT = {"high": 1.0, "medium": 0.9, "low": 0.7}
+CONFIDENCE_WEIGHT = {"verified": 1.0, "high": 1.0, "medium": 0.9, "low": 0.7}
 TIMELINE_WINDOW_DAYS = 3 * 365  # beyond this the build windows don't meaningfully overlap
 
 _to_m = Transformer.from_crs("EPSG:4326", "EPSG:5070", always_xy=True).transform  # CONUS Albers, meters
