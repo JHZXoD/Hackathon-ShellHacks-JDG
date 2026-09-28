@@ -2,7 +2,18 @@
 
 **Find where neighboring power utilities are planning grid construction in the same place, at the same time, and what coordinating could save customers.**
 
-[**Live app →** gridneighbors.design](https://gridneighbors.design) · [**Devpost** (demo video)](https://devpost.com/software/grid-neighbors) · Built solo at **ShellHacks 2026** for the **Sperry Tech GridLock Challenge**
+![ShellHacks 2026](https://img.shields.io/badge/ShellHacks-2026%20%C2%B7%2010th%20anniversary-ea580c)
+![Sperry Tech GridLock Challenge](https://img.shields.io/badge/Challenge-Sperry%20Tech%20GridLock-2563eb)
+![Python](https://img.shields.io/badge/Python-3.12-3776ab?logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-app-ff4b4b?logo=streamlit&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-19%20passing-16a34a)
+
+Built solo in 24 hours at **[ShellHacks 2026](https://shellhacks-2026.devpost.com/)** (FIU), my first hackathon, for the **Sperry Tech GridLock Challenge**.
+**[Devpost submission](https://devpost.com/software/grid-neighbors)** · **[Demo video](https://youtu.be/GqLUE-0TcjY)**
+
+[![Watch the GridNeighbors demo video](docs/images/demo-video.jpg)](https://youtu.be/GqLUE-0TcjY)
+
+> **About the live demo:** during the event the app ran at `gridneighbors.design` on DigitalOcean App Platform, with MongoDB Atlas for shared data. That hosted version was shut down after judging. You can still [run it locally](#run-it-locally) in about two minutes; the processed data is included in the repo.
 
 ![GridNeighbors map: Dominion Energy South Carolina (blue) and Georgia Power (orange) projects with overlaps (dashed) and the ranked opportunity list](docs/images/map.png)
 
@@ -121,6 +132,16 @@ Using the *smaller* project's cost means these estimates can't inflate the savin
 
 The 55 projects without a location are mostly in the Atlanta area, far from the border.
 
+## The hackathon
+
+| | |
+|---|---|
+| **Event** | ShellHacks 2026, Florida's largest hackathon (10th anniversary), Florida International University, Sept 26–27, 2026 |
+| **Team** | Solo, first-time hacker |
+| **Challenge** | Sperry Tech GridLock: compare at least two utilities' public construction plans, flag geographic (< 40 km) and timeline overlaps, show them on an interactive map with a ranked list, and estimate the impact (bonus) |
+| **Tracks entered** | Sperry Tech GridLock · Microsoft "What's Missing?" · MLH Best Use of Gemini API · MLH Best Use of MongoDB Atlas · MLH Best Use of DigitalOcean · MLH Best Domain Name from GoDaddy Registry · Best First-Time Hacker |
+| **Deployed during the event** | DigitalOcean App Platform (auto-deploy from this repo via `Procfile`), MongoDB Atlas, custom domain `gridneighbors.design` |
+
 ## Run it locally
 
 ```bash
@@ -138,6 +159,27 @@ Optional features: copy `.env.example` to `.env` and fill in:
 | `MONGODB_URI` | Shared location verifications (MongoDB Atlas connection string) |
 
 The app runs without either one; those features are simply hidden.
+
+### Project structure
+
+```
+app.py                  Streamlit app (map, ranked table, detail panel, verification, briefs)
+gridlock/
+  ingest.py             Parse the two utilities' PDF project lists
+  geocode.py            Match endpoint substations to OpenStreetMap; border model; confidence
+  overlap.py            Closest-point overlaps, tiers, timeline gap, score
+  cost.py               Savings and per-customer impact estimate
+  brief.py              Gemini coordination briefs (with model fallback and cache)
+  store.py              MongoDB Atlas location verifications
+  pregen_briefs.py      Pre-generate briefs for the top opportunities
+data/
+  processed/            projects_raw.csv, projects.csv, overlaps.csv
+  overrides.csv         Hand-verified substation coordinates
+  briefs.json           Cached Gemini briefs
+tests/                  pytest suite (includes Sperry's answer key)
+tools/capture_media.py  Headless-browser capture of the screenshots and demo video
+docs/images/            README images
+```
 
 ### Rebuilding the data
 
@@ -168,7 +210,7 @@ To hand-verify coordinates, add them to [`data/overrides.csv`](data/overrides.cs
 
 ## Built with
 
-Python · pandas · pdfplumber · pypdf · Shapely · pyproj · OpenStreetMap (Overpass, Nominatim) · Streamlit · Folium · Google Gemini API · MongoDB Atlas · pytest · DigitalOcean App Platform · GoDaddy Registry (`.design` domain)
+Python · pandas · pdfplumber · pypdf · Shapely · pyproj · OpenStreetMap (Overpass, Nominatim) · Streamlit · Folium · Google Gemini API · MongoDB Atlas · pytest · Playwright. Hosted during the event on DigitalOcean App Platform with a GoDaddy Registry (`.design`) domain.
 
 ## Acknowledgments
 

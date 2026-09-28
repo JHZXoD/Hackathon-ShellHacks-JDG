@@ -1,6 +1,7 @@
 """Capture Devpost gallery screenshots and a captioned walkthrough video of GridNeighbors.
 
-    python tools/capture_media.py [url]          (default: https://gridneighbors.design)
+    pip install playwright imageio-ffmpeg && python -m playwright install chromium
+    python tools/capture_media.py [url]          (default: a local run at http://localhost:8501)
 
 Writes media/0N-*.png (3:2, for the Devpost image gallery) and media/gridneighbors-demo.mp4.
 Read-only: it never saves a location verification, so the shared database is untouched.
@@ -15,7 +16,7 @@ from pathlib import Path
 import imageio_ffmpeg
 from playwright.sync_api import Page, sync_playwright
 
-URL = sys.argv[1] if len(sys.argv) > 1 else "https://gridneighbors.design"
+URL = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8501"
 OUT = Path(__file__).resolve().parent.parent / "media"
 
 # caption bar + a visible cursor (headless recordings don't draw the mouse)
@@ -166,7 +167,7 @@ def video(browser) -> None:
     page.get_by_role("tab", name="Method & data quality").click()
     settle(page, 800)
     caption(page, "Every location has a confidence grade, and the pipeline reproduces all 6 overlaps in Sperry's answer key.", 7)
-    caption(page, "GridNeighbors  ·  live at gridneighbors.design  ·  ShellHacks 2026", 5)
+    caption(page, "GridNeighbors  ·  built at ShellHacks 2026", 5)
     caption(page, None, 1)
 
     src = Path(page.video.path())
